@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>chirp</title>
+<style>
+  :root{
+    --bg-a:#0A0D14; --bg-b:#121826;
+    --card-a:rgba(20,26,40,0.97); --card-b:rgba(14,18,28,0.97);
+    --border:rgba(255,255,255,0.08);
+    --text:#F0F4F8; --muted:#8A99AD;
+    --tx-light:#6FE9F2; --tx:#00CDDC; --tx-dark:#00707F;
+    --rx-light:#FF7CA0; --rx:#E63970; --rx-dark:#7A1240;
+    --radius:16px;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){ --bg-a:#EEF1F6; --bg-b:#DDE3EC; --card-a:#FFFFFF; --card-b:#F4F6FA; --border:rgba(0,0,0,0.08); --text:#12161F; --muted:#5B6675; }
+  }
+  :root[data-theme="dark"]{ --bg-a:#0A0D14; --bg-b:#121826; --card-a:rgba(20,26,40,0.97); --card-b:rgba(14,18,28,0.97); --border:rgba(255,255,255,0.08); --text:#F0F4F8; --muted:#8A99AD; }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  html,body{height:100%;}
+  body{
+    position:relative; background:linear-gradient(160deg,var(--bg-a) 0%, var(--bg-b) 55%, var(--bg-a) 100%);
+    color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;overflow:hidden;
+  }
+  body::before{
+    content:''; position:fixed; inset:0; pointer-events:none;
+    background:
+      radial-gradient(circle at 22% 18%, rgba(0,205,220,0.10), transparent 55%),
+      radial-gradient(circle at 82% 85%, rgba(230,57,112,0.09), transparent 55%);
+  }
+  .container{
+    position:relative; width:100%;max-width:480px;aspect-ratio:4/3;
+    background:linear-gradient(160deg,var(--card-a) 0%, var(--card-b) 75%, var(--card-a) 100%);
+    border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:0 24px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow:hidden;display:flex;flex-direction:column;
+  }
+  .tabs{position:relative;display:flex;gap:6px;margin:14px 14px 2px 14px;padding:4px;background:rgba(0,0,0,0.22);border:1px solid var(--border);border-radius:12px;flex-shrink:0;}
+  .tab-indicator{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 7px);border-radius:9px;background:linear-gradient(135deg,var(--tx-light) 0%, var(--tx) 55%, var(--tx-dark) 100%);box-shadow:0 6px 14px -4px rgba(0,205,220,.55);transition:transform .32s cubic-bezier(.65,0,.35,1), background .32s ease, box-shadow .32s ease;}
+  .tab-indicator.rx{transform:translateX(calc(100% + 6px));background:linear-gradient(135deg,var(--rx-light) 0%, var(--rx) 55%, var(--rx-dark) 100%);box-shadow:0 6px 14px -4px rgba(230,57,112,.55);}
+  .tab-btn{position:relative;z-index:1;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border:none;border-radius:9px;background:transparent;color:var(--muted);font-size:13.5px;font-weight:700;cursor:pointer;text-transform:lowercase;transition:color .3s ease;}
+  .tab-btn svg{width:14px;height:14px;flex-shrink:0;}
+  .tab-btn.is-active-tx{color:#04141A;}
+  .tab-btn.is-active-rx{color:#fff;}
+  .panel{display:none;padding:14px 20px 18px;flex-direction:column;flex:1;justify-content:flex-start;gap:8px;overflow:auto;}
+  .panel.active{display:flex;}
+  label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:lowercase;}
+  .textarea-wrap{position:relative;flex:1;min-height:30px;display:flex;}
+  textarea{width:100%;flex:1;min-height:0;background:linear-gradient(180deg, rgba(128,128,128,0.10), rgba(128,128,128,0.04));border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px;font-size:15px;resize:none;outline:none;}
+  textarea:focus{border-color:var(--muted);}
+  .progress-track{position:absolute;left:10px;right:10px;bottom:8px;height:3px;border-radius:2px;background:rgba(128,128,128,.25);overflow:hidden;opacity:0;transition:opacity .2s ease;pointer-events:none;}
+  .progress-track.show{opacity:1;}
+  .progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--tx-light),var(--tx));border-radius:2px;}
+  /* fixed-height block so both tabs' textareas get identical remaining space,
+     regardless of which tab-specific controls sit below them */
+  .extra-block{flex-shrink:0;min-height:46px;display:flex;flex-direction:column;justify-content:center;gap:6px;}
+  .speed-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);height:14px;}
+  .speed-row span:last-child{color:var(--text);font-weight:600;font-family:ui-monospace,monospace;}
+  input[type="range"]{width:100%;accent-color:var(--tx);}
+  button.action-btn{padding:11px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;width:100%;text-transform:lowercase;transition:filter .15s ease, opacity .15s ease;flex-shrink:0;}
+  button.action-btn:hover:not(:disabled){filter:brightness(1.08);}
+  .btn-tx{background:linear-gradient(135deg,var(--tx-light) 0%, var(--tx) 45%, var(--tx-dark) 100%);color:#04141A;}
+  .btn-rx{background:linear-gradient(135deg,var(--rx-light) 0%, var(--rx) 45%, var(--rx-dark) 100%);color:#fff;}
+  .row{display:flex;gap:8px;width:100%;}
+  .btn-sec{background:linear-gradient(135deg, rgba(128,128,128,0.22), rgba(128,128,128,0.08));color:var(--text);padding:9px;font-size:13px;font-weight:700;flex:1;border:none;border-radius:8px;cursor:pointer;text-transform:lowercase;}
+  .btn-sec:hover{filter:brightness(1.15);}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="tabs">
+    <div class="tab-indicator" id="tabIndicator"></div>
+    <button class="tab-btn is-active-tx" id="btnTabTx" onclick="switchTab('tx')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg>
+      transmit
+    </button>
+    <button class="tab-btn" id="btnTabRx" onclick="switchTab('rx')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+      receive
+    </button>
+  </div>
+
+  <div class="panel active" id="panelTx">
+    <label for="txText">send message</label>
+    <div class="textarea-wrap">
+      <textarea id="txText" autocomplete="off" spellcheck="false"></textarea>
+      <div class="progress-track" id="txProgressTrack"><div class="progress-fill" id="txProgressFill"></div></div>
+    </div>
+    <div class="extra-block">
+      <div class="speed-row"><span>speed</span><span id="speedLabel">1.0x</span></div>
+      <input type="range" id="speedSlider" min="0.5" max="1.5" step="0.5" value="1" oninput="updateSpeedLabel()">
+    </div>
+    <button class="action-btn btn-tx" id="txBtn" onclick="toggleTransmit()" disabled>transmit</button>
+  </div>
+
+  <div class="panel" id="panelRx">
+    <label for="rxText">decode message</label>
+    <div class="textarea-wrap">
+      <textarea id="rxText" readonly autocomplete="off"></textarea>
+    </div>
+    <div class="extra-block">
+      <div class="row">
+        <button class="btn-sec" onclick="clearRx()">clear</button>
+        <button class="btn-sec" onclick="copyRx(event)">copy text</button>
+      </div>
+    </div>
+    <button class="action-btn btn-rx" id="rxToggleBtn" onclick="toggleListening()">start listening</button>
+  </div>
+</div>
+
+<script>
+/* Character usage weights (approx. German-language frequency) — common
+   characters get bigger frequency gaps to their neighbors than rare ones. */
+const USAGE = {
+  ' ':16.0, 'e':17.4, 'n':9.78, 'i':7.55, 's':7.27, 'r':7.00, 'a':6.51, 't':6.15,
+  'd':5.08, 'h':4.76, 'u':4.35, 'l':3.44, 'c':3.06, 'g':3.01, 'm':2.53, 'o':2.51,
+  'b':1.89, 'w':1.89, 'f':1.66, 'k':1.21, 'z':1.13, 'p':0.79, 'v':0.67, 'ü':0.65,
+  'ä':0.54, 'ö':0.30, 'ß':0.31, 'j':0.27, 'y':0.04, 'x':0.03, 'q':0.02,
+  ',':1.2, '.':1.0, '!':0.35, '?':0.25, ':':0.2, '-':0.3, '+':0.05,
+  '/':0.05, '(':0.08, ')':0.08, '=':0.05,
+  '0':0.6, '1':0.6, '2':0.6, '3':0.6, '4':0.6, '5':0.6, '6':0.6, '7':0.6, '8':0.6, '9':0.6
+};
+// uppercase letters get their own tones (rarer than lowercase — mostly
+// sentence-starts and names — so they get a smaller share of the weight)
+for (const k of Object.keys(USAGE)){
+  if (/^[a-z]$/.test(k)) USAGE[k.toUpperCase()] = USAGE[k] * 0.12;
+}
+const SYMBOLS = Object.keys(USAGE).sort((a, b) => USAGE[b] - USAGE[a]);
+const NSYM = SYMBOLS.length;
+
+// fixed range — widened from the originally-tested 4000-6000 to give every
+// character more room to be told apart, which matters most at 1.5x speed
+const BAND_LOW = 4000, BAND_HIGH = 7000;
+let START_TONE, SEP_TONE, END_TONE, charFreq, charTolerance;
+
+function rebuildFrequencyMap(){
+  const width = BAND_HIGH - BAND_LOW;
+  const margin = Math.max(150, width * 0.08);
+  START_TONE = BAND_LOW - margin;
+  SEP_TONE = BAND_LOW - margin * 2.2;
+  END_TONE = BAND_HIGH + margin;
+  const HARD_FLOOR = 18; // safety minimum, not a target — weighting fills the rest
+  const minGap = Math.min(HARD_FLOOR, width / (NSYM - 1));
+  const gapWeights = [];
+  for (let i = 0; i < NSYM - 1; i++) gapWeights.push((USAGE[SYMBOLS[i]] + USAGE[SYMBOLS[i + 1]]) / 2);
+  const gapWeightSum = gapWeights.reduce((a, b) => a + b, 0);
+  const extraBudget = Math.max(0, width - minGap * (NSYM - 1));
+  const fr = [BAND_LOW];
+  for (let i = 0; i < NSYM - 1; i++){
+    fr.push(fr[i] + minGap + extraBudget * (gapWeights[i] / gapWeightSum));
+  }
+  charFreq = new Map(SYMBOLS.map((s, i) => [s, fr[i]]));
+  charTolerance = new Map(SYMBOLS.map((s, i) => {
+    const left = i > 0 ? fr[i] - fr[i - 1] : Infinity;
+    const right = i < NSYM - 1 ? fr[i + 1] - fr[i] : Infinity;
+    return [s, Math.max(8, Math.min(left, right) / 2 - 3)];
+  }));
+}
+rebuildFrequencyMap();
+
+function getFrequency(ch){ return charFreq.get(ch); }
+function isSupportedChar(ch){ return charFreq.has(ch); }
+
+function getClosestChar(freq){
+  if (Math.abs(freq - START_TONE) < 40) return 'START';
+  if (Math.abs(freq - SEP_TONE) < 40) return 'SEP';
+  if (Math.abs(freq - END_TONE) < 40) return 'END';
+  let best = null, minDiff = Infinity;
+  for (const [ch, f] of charFreq){
+    const d = Math.abs(f - freq);
+    if (d < minDiff){ minDiff = d; best = ch; }
+  }
+  if (best === null) return null;
+  return minDiff < charTolerance.get(best) ? best : null;
+}
+
+/* ---- TABS (animated) ---- */
+function switchTab(tab){
+  const isTx = tab === 'tx';
+  document.getElementById('panelTx').classList.toggle('active', isTx);
+  document.getElementById('panelRx').classList.toggle('active', !isTx);
+  document.getElementById('btnTabTx').className = 'tab-btn' + (isTx ? ' is-active-tx' : '');
+  document.getElementById('btnTabRx').className = 'tab-btn' + (!isTx ? ' is-active-rx' : '');
+  document.getElementById('tabIndicator').className = 'tab-indicator' + (isTx ? '' : ' rx');
+}
+
+function updateSpeedLabel(){
+  const v = parseFloat(document.getElementById('speedSlider').value).toFixed(1);
+  document.getElementById('speedLabel').innerText = v + 'x';
+}
+
+function validateTxText(){
+  if (isTransmitting) return; // don't touch the button while it's acting as "stop transmitting"
+  const text = document.getElementById('txText').value;
+  const btn = document.getElementById('txBtn');
+  let invalidChar = null;
+  for (const ch of text){
+    if (!isSupportedChar(ch)){ invalidChar = ch; break; }
+  }
+  btn.disabled = text.length === 0 || invalidChar !== null;
+  btn.title = invalidChar ? ('unsupported character: "' + invalidChar + '"') : '';
+}
+document.getElementById('txText').addEventListener('input', validateTxText);
+
+function clearRx(){
+  document.getElementById('rxText').value = '';
+  rxState = 'IDLE';
+  receivedChars = [];
+  candidateSym = null;
+  lastFedSym = null;
+}
+
+function copyRx(e){
+  const text = document.getElementById('rxText').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = e.target;
+    const old = btn.innerText;
+    btn.innerText = 'copied!';
+    setTimeout(() => btn.innerText = old, 1200);
+  });
+}
+
+/* ---- TRANSMITTER ---- */
+let audioCtxTx = null;
+let isTransmitting = false;
+let txTimeoutId = null;
+let txAnimFrameId = null;
+function getSlotMs(speed){ return 110 / speed; }
+
+function toggleTransmit(){ isTransmitting ? stopTransmission() : startTransmission(); }
+
+function startTransmission(){
+  const text = document.getElementById('txText').value;
+  if (!text) return;
+
+  const speed = parseFloat(document.getElementById('speedSlider').value) || 1;
+  const slotMs = getSlotMs(speed);
+  const gapMs = Math.max(6, slotMs * 0.12);
+  const toneOnMs = slotMs - gapMs;
+  const attackMs = Math.min(8, toneOnMs * 0.25);
+
+  audioCtxTx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtxTx.state === 'suspended') audioCtxTx.resume();
+
+  isTransmitting = true;
+  const btn = document.getElementById('txBtn');
+  const track = document.getElementById('txProgressTrack');
+  const fill = document.getElementById('txProgressFill');
+  btn.innerText = 'stop transmitting';
+  track.classList.add('show');
+  fill.style.width = '0%';
+
+  // START sent twice (protects against a stray click/tap sound at the
+  // moment of pressing the button corrupting the one-shot sync token)
+  const sequence = [START_TONE, START_TONE];
+  for (const ch of text){
+    const f = getFrequency(ch);
+    if (f){ sequence.push(SEP_TONE); sequence.push(f); }
+  }
+  sequence.push(SEP_TONE);
+  sequence.push(END_TONE);
+
+  const startTime = audioCtxTx.currentTime + 0.3;
+  sequence.forEach((freq, i) => {
+    const t0 = startTime + i * (slotMs / 1000);
+    const a = attackMs / 1000;
+    const on = toneOnMs / 1000;
+    const osc = audioCtxTx.createOscillator();
+    const gain = audioCtxTx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0, t0);
+    // quiet on purpose: this keeps effective range short (best ~5cm,
+    // shouldn't carry much past ~20cm) rather than trying to reach far
+    gain.gain.linearRampToValueAtTime(0.16, t0 + a);
+    gain.gain.linearRampToValueAtTime(0.16, t0 + on - a);
+    gain.gain.linearRampToValueAtTime(0, t0 + on);
+    osc.connect(gain);
+    gain.connect(audioCtxTx.destination);
+    osc.start(t0);
+    osc.stop(t0 + on + 0.005);
+  });
+
+  const totalMs = 300 + sequence.length * slotMs + 200;
+  const t0Wall = performance.now();
+  function tickProgress(){
+    if (!isTransmitting) return;
+    const pct = Math.min(100, ((performance.now() - t0Wall) / totalMs) * 100);
+    fill.style.width = pct + '%';
+    if (pct < 100) txAnimFrameId = requestAnimationFrame(tickProgress);
+  }
+  txAnimFrameId = requestAnimationFrame(tickProgress);
+
+  txTimeoutId = setTimeout(finishTransmission, totalMs);
+}
+
+function finishTransmission(){
+  isTransmitting = false;
+  if (txAnimFrameId) cancelAnimationFrame(txAnimFrameId);
+  document.getElementById('txBtn').innerText = 'transmit';
+  document.getElementById('txProgressTrack').classList.remove('show');
+  if (audioCtxTx) audioCtxTx.close();
+  validateTxText();
+}
+
+function stopTransmission(){
+  if (txTimeoutId) clearTimeout(txTimeoutId);
+  finishTransmission();
+}
+
+/* ---- RECEIVER ---- */
+let audioCtxRx = null, analyser = null, isListening = false, rxStream = null;
+let rxState = 'IDLE';
+let receivedChars = [];
+let candidateSym = null, candidateSince = 0, lastFedSym = null;
+let ampThreshold = 55;
+const CONFIRM_MS = 22;
+const PEAK_RATIO_MIN = 2.2;
+
+function toggleListening(){ isListening ? stopListening() : startListening(); }
+
+function startListening(){
+  navigator.mediaDevices.getUserMedia({ audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false } })
+  .then(stream => {
+    rxStream = stream;
+    audioCtxRx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtxRx.createAnalyser();
+    analyser.fftSize = 2048;
+    const mic = audioCtxRx.createMediaStreamSource(stream);
+    mic.connect(analyser);
+
+    rxState = 'IDLE'; receivedChars = [];
+    candidateSym = null; lastFedSym = null;
+    document.getElementById('rxToggleBtn').innerText = 'stop listening';
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let maxSeen = 0;
+    const calStart = performance.now();
+    function calibrate(){
+      analyser.getByteFrequencyData(data);
+      let peak = 0;
+      for (let i = 0; i < data.length; i++) if (data[i] > peak) peak = data[i];
+      maxSeen = Math.max(maxSeen, peak);
+      if (performance.now() - calStart < 350){
+        requestAnimationFrame(calibrate);
+      } else {
+        ampThreshold = Math.min(120, Math.max(35, maxSeen + 20));
+        isListening = true;
+        requestAnimationFrame(runReceiverLoop);
+      }
+    }
+    requestAnimationFrame(calibrate);
+  })
+  .catch(() => alert('Microphone access is required to receive.'));
+}
+
+function stopListening(){
+  isListening = false;
+  if (rxStream) rxStream.getTracks().forEach(t => t.stop());
+  if (audioCtxRx) audioCtxRx.close();
+  document.getElementById('rxToggleBtn').innerText = 'start listening';
+}
+
+function feedSymbol(sym){
+  if (sym === 'START'){
+    rxState = 'WAIT_SEP';
+    receivedChars = [];
+    document.getElementById('rxText').value = '';
+    return;
+  }
+  if (rxState === 'WAIT_SEP'){
+    if (sym === 'SEP') rxState = 'WAIT_SYMBOL';
+  } else if (rxState === 'WAIT_SYMBOL'){
+    if (sym === 'END'){
+      rxState = 'IDLE';
+    } else if (sym && sym !== 'SEP'){
+      receivedChars.push(sym);
+      document.getElementById('rxText').value = receivedChars.join('');
+      rxState = 'WAIT_SEP';
+    }
+  }
+}
+
+function interpolatedPeakFreq(data, nyquist){
+  let peakVal = 0, peakBin = 0, sum = 0;
+  for (let i = 0; i < data.length; i++){
+    sum += data[i];
+    if (data[i] > peakVal){ peakVal = data[i]; peakBin = i; }
+  }
+  const avg = sum / data.length;
+  let trueBin = peakBin;
+  if (peakBin > 0 && peakBin < data.length - 1){
+    const y1 = data[peakBin - 1], y2 = data[peakBin], y3 = data[peakBin + 1];
+    const denom = (y1 - 2 * y2 + y3);
+    if (denom !== 0){
+      const d = 0.5 * (y1 - y3) / denom;
+      if (d > -1 && d < 1) trueBin = peakBin + d;
+    }
+  }
+  return { freq: trueBin * nyquist / data.length, level: peakVal, avg: avg };
+}
+
+function runReceiverLoop(){
+  if (!isListening) return;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+
+  const nyquist = audioCtxRx.sampleRate / 2;
+  const { freq: peakFreq, level: peakVal, avg } = interpolatedPeakFreq(data, nyquist);
+  const now = performance.now();
+  const ratio = avg > 0 ? peakVal / avg : 0;
+  const sym = (peakVal > ampThreshold && ratio > PEAK_RATIO_MIN) ? getClosestChar(peakFreq) : null;
+
+  if (sym !== candidateSym){
+    candidateSym = sym;
+    candidateSince = now;
+  } else if (sym && (now - candidateSince) >= CONFIRM_MS && sym !== lastFedSym){
+    feedSymbol(sym);
+    lastFedSym = sym;
+  }
+  if (!sym) lastFedSym = null;
+
+  requestAnimationFrame(runReceiverLoop);
+}
+
+/* ---- RESET ON EVERY LOAD ---- */
+function resetAll(){
+  if (isListening) stopListening();
+  if (isTransmitting) stopTransmission();
+  document.getElementById('txText').value = '';
+  document.getElementById('rxText').value = '';
+  document.getElementById('speedSlider').value = 1;
+  updateSpeedLabel();
+  document.getElementById('txProgressTrack').classList.remove('show');
+  document.getElementById('txProgressFill').style.width = '0%';
+  validateTxText();
+  switchTab('tx');
+}
+window.addEventListener('pageshow', resetAll);
+</script>
+</body>
+</html>
